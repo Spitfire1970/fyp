@@ -1,0 +1,8 @@
+myenv
+.env
+pgn_files
+chess_games.db
+stylometry_paper.pdf
+ng-video-lecture
+players_seen.json
+.DS_Store
