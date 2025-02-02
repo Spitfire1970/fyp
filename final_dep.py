@@ -14,8 +14,6 @@ RATING_THRESHOLD = 2200
 DB_PATH = "chess_games.db"
 COMMIT_RATE = 10000
 JSON_NAME = 'players_seen.json'
-STARTER = "vV0ad1O4"
-PROCESS = False
 
 def create_database(db_path: str):
     conn = sqlite3.connect(db_path)
@@ -23,7 +21,6 @@ def create_database(db_path: str):
     CREATE TABLE IF NOT EXISTS games (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         game_id TEXT,
-        username TEXT,
         username_hash TEXT,
         color TEXT,
         moves TEXT,
@@ -70,7 +67,6 @@ def get_time_seconds(time_control: str) -> int:
     return int(base_time) if base_time.isdigit() else 0
 
 def process_pgn_file(pgn_path: str, conn: sqlite3.Connection, players_seen: dict):
-    global PROCESS
     all_players = set(players_seen.keys())
     games_processed = 0
     with open(pgn_path, "rb") as compressed_file:
@@ -83,11 +79,9 @@ def process_pgn_file(pgn_path: str, conn: sqlite3.Connection, players_seen: dict
                         break
                     games_processed += 1
                     game_id = game.headers.get("Site", "").split('/')[-1]
-                    if game_id == STARTER: PROCESS = True
-                    if not PROCESS: continue
                     print(games_processed)
-                    white = game.headers.get("White")
-                    black = game.headers.get("Black")
+                    white = hash_username(game.headers.get("White"))
+                    black = hash_username(game.headers.get("Black"))
                     white_rating = int(game.headers.get("WhiteElo", "0"))
                     black_rating = int(game.headers.get("BlackElo", "0"))
                     time_control = game.headers.get("TimeControl", "")
@@ -110,10 +104,10 @@ def process_pgn_file(pgn_path: str, conn: sqlite3.Connection, players_seen: dict
                         split = assign_split()
                         conn.execute("""
                             INSERT OR IGNORE INTO games 
-                            (game_id, username, username_hash, color, 
+                            (game_id, username_hash, color, 
                             moves, time_control, seen, rating, split, source_pgn)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (game_id, white, hash_username(white), 'white',
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (game_id, white, 'white',
                             moves, time_control, players_seen[white], white_rating, split, pgn_path))
                     
                     if black_rating >= RATING_THRESHOLD:
@@ -123,10 +117,10 @@ def process_pgn_file(pgn_path: str, conn: sqlite3.Connection, players_seen: dict
                         split = assign_split()
                         conn.execute("""
                             INSERT OR IGNORE INTO games 
-                            (game_id, username, username_hash, color, 
+                            (game_id, username_hash, color, 
                             moves, time_control, seen, rating, split, source_pgn)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (game_id, black, hash_username(black), 'black',
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (game_id, black, 'black',
                             moves, time_control, players_seen[black], black_rating, split, pgn_path))
                     if games_processed % COMMIT_RATE == 0:
                         conn.commit()
