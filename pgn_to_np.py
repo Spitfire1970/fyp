@@ -3,6 +3,7 @@ import chess
 import chess.pgn
 from typing import Optional, Tuple
 from io import StringIO
+import math
 
 def process_game(game: chess.pgn.Game) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
@@ -38,8 +39,10 @@ def process_game(game: chess.pgn.Game) -> Optional[Tuple[np.ndarray, np.ndarray]
         # Add new position to seen positions
         positions_seen.add(board.fen().split(' ')[0])
         
+        # start = time.time()
         # Create planes for the position after the move
         next_planes = create_position_planes(board, positions_seen)
+        # print(time.time()-start)
         
         # Create the full 34-plane representation
         move_planes = np.zeros((34, 8, 8), dtype=np.float32)
@@ -64,13 +67,13 @@ def process_game(game: chess.pgn.Game) -> Optional[Tuple[np.ndarray, np.ndarray]
         
         # Move time - normalized between 0 and 1 (plane 33)
         # Extract clock info if available, otherwise use 0.5 as default
-        clock_info = node.comment.strip('{}[] ').split()[1] if node.comment else "0:00:30"
+        clock_info = node.comment.strip('{}[] ').split()[1] if node.comment else "0:00:00"
         try:
             minutes, seconds = map(int, clock_info.split(':')[1:])
             total_seconds = minutes * 60 + seconds
-            move_planes[32] = min(1.0, total_seconds / 180.0)  # Normalize to [0,1], capping at 3 minutes
+            move_planes[32] = normalize_chess_time(total_seconds)
         except:
-            move_planes[32] = 0.5
+            move_planes[32] = 0.1
         
         # All ones (plane 34)
         move_planes[33] = 1.0
@@ -90,6 +93,14 @@ def process_game(game: chess.pgn.Game) -> Optional[Tuple[np.ndarray, np.ndarray]
     black_array = np.stack(black_moves, axis=0)
     
     return white_array, black_array
+
+def normalize_chess_time(seconds):
+    if seconds < 0.1:
+        return 0.0
+    base = 5.0
+    max_time = 900.0
+    normalized = math.log(seconds/base + 1) / math.log(max_time/base + 1)
+    return min(normalized, 1.0)
 
 def create_position_planes(board: chess.Board, positions_seen: set) -> np.ndarray:
     """
